@@ -1,0 +1,7 @@
+api-version: 1.13
+name: Werewolf
+main: fun.kaituo.Werewolf
+version: 1.0
+author: YFshadaow
+depend: [GameUtils,ProtocolLib]
+#
