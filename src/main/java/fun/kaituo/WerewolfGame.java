@@ -117,7 +117,7 @@ public class WerewolfGame extends Game implements Listener {
 
     private WerewolfGame(Werewolf plugin) {
         this.plugin = plugin;
-        initializeGame(plugin, "Werewolf", "§c狼人杀§f-§7精神病栋", new Location(world, -1000, 40, -1000, 180, 0), new BoundingBox(-1071, 61, -1065, -931, 100, -925));
+        initializeGame(plugin, "Werewolf", "§7精神病栋", new Location(world, -1000, 40, -1000, 180, 0), new BoundingBox(-1071, 61, -1065, -931, 100, -925));
         initializeButtons(new Location(world, -1000, 42, -1008), BlockFace.SOUTH,
                 new Location(world, -994, 41, -1000), BlockFace.WEST);
         players = Werewolf.players;
