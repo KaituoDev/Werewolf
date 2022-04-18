@@ -533,6 +533,7 @@ public class WerewolfGame extends Game implements Listener {
             placeStartButton();
             HandlerList.unregisterAll(this);
         }, 100);
+
         players.clear();
         playersWhoUsedButton.clear();
         humans.clear();
@@ -540,6 +541,7 @@ public class WerewolfGame extends Game implements Listener {
         playersAlive.clear();
         team.unregister();
         running = false;
+        voteTask.cancel();
         gameUUID = UUID.randomUUID();
         cancelGameTasks();
     }
