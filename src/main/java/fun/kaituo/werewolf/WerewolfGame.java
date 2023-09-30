@@ -1,4 +1,4 @@
-package fun.kaituo;
+package fun.kaituo.werewolf;
 
 import com.comphenix.protocol.PacketType;
 import com.comphenix.protocol.ProtocolLibrary;
@@ -6,8 +6,9 @@ import com.comphenix.protocol.ProtocolManager;
 import com.comphenix.protocol.events.PacketAdapter;
 import com.comphenix.protocol.events.PacketEvent;
 import com.comphenix.protocol.wrappers.EnumWrappers;
-import fun.kaituo.event.PlayerChangeGameEvent;
-import fun.kaituo.event.PlayerEndGameEvent;
+import fun.kaituo.gameutils.Game;
+import fun.kaituo.gameutils.PlayerQuitData;
+import fun.kaituo.gameutils.event.PlayerEndGameEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -29,7 +30,6 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.PlayerArmorStandManipulateEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -46,7 +46,6 @@ import org.bukkit.util.BoundingBox;
 import java.io.IOException;
 import java.util.*;
 
-import static fun.kaituo.GameUtils.*;
 
 public class WerewolfGame extends Game implements Listener {
     private static final WerewolfGame instance = new WerewolfGame((Werewolf) Bukkit.getPluginManager().getPlugin("Werewolf"));
@@ -117,9 +116,10 @@ public class WerewolfGame extends Game implements Listener {
 
     private WerewolfGame(Werewolf plugin) {
         this.plugin = plugin;
-        initializeGame(plugin, "Werewolf", "§7精神病栋", new Location(world, -1000, 40, -1000, 180, 0), new BoundingBox(-1071, 61, -1065, -931, 100, -925));
+        initializeGame(plugin, "Werewolf", "§7精神病栋", new Location(world, -1000, 40, -1000, 180, 0));
         initializeButtons(new Location(world, -1000, 42, -1008), BlockFace.SOUTH,
                 new Location(world, -994, 41, -1000), BlockFace.WEST);
+        initializeGameRunnable();
         players = Werewolf.players;
         werewolf.registerNewObjective("werewolf", "dummy", "狼人杀-精神病栋");
         werewolf.getObjective("werewolf").setDisplaySlot(DisplaySlot.SIDEBAR);
@@ -493,21 +493,7 @@ public class WerewolfGame extends Game implements Listener {
         }
     }
 
-    @EventHandler
-    public void onPlayerChangeGame(PlayerChangeGameEvent pcge) {
-        players.remove(pcge.getPlayer());
-        humans.remove(pcge.getPlayer());
-        werewolves.remove(pcge.getPlayer());
-        playersAlive.remove(pcge.getPlayer());
-    }
 
-    @EventHandler
-    public void onPlayerQuit(PlayerQuitEvent pqe) {
-        players.remove(pqe.getPlayer());
-        humans.remove(pqe.getPlayer());
-        werewolves.remove(pqe.getPlayer());
-        playersAlive.remove(pqe.getPlayer());
-    }
 
     private ItemStack generateItemStack(Material material, String name, int amount) {
         ItemStack item = new ItemStack(material, amount);
@@ -521,7 +507,27 @@ public class WerewolfGame extends Game implements Listener {
         return players;
     }
 
-    private void endGame() {
+    private void endGame(String msg, List<Player> winningPlayers) {
+        pm.removePacketListener(pa);
+        List<Player> winningPlayersCopy = new ArrayList<>(winningPlayers);
+        List<Player> playersCopy = new ArrayList<>(players);
+        for (Player p : winningPlayersCopy) {
+            spawnFireworks(p);
+        }
+        for (Player p : playersCopy) {
+            p.sendTitle(msg, null, 5, 50, 5);
+            String string = "";
+            for (int i = 0; i < werewolvesCopy.size(); i++) {
+                string += (" " + werewolvesCopy.get(i).getName());
+            }
+            p.sendMessage("§b狼人玩家有 " + string);
+            p.resetPlayerWeather();
+            p.resetPlayerTime();
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                p.teleport(hubLocation);
+                Bukkit.getPluginManager().callEvent(new PlayerEndGameEvent(p, instance));
+            }, 100);
+        }
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             for (Entity e : world.getNearbyEntities(new BoundingBox(-1500, 60, -1500, -500, 256, -500))) {
                 if (e instanceof ArmorStand) {
@@ -553,8 +559,7 @@ public class WerewolfGame extends Game implements Listener {
         }
     }
 
-    @Override
-    protected void initializeGameRunnable() {
+    private void initializeGameRunnable() {
         gameRunnable = () -> {
 
             potionSpawnPeriod = Werewolf.potionSpawnPeriod;
@@ -660,75 +665,15 @@ public class WerewolfGame extends Game implements Listener {
 
                 taskIds.add(Bukkit.getScheduler().scheduleSyncRepeatingTask(plugin, () -> {
                     if (dragonBreathNumber >= dragonBreathNeeded) {
-                        pm.removePacketListener(pa);
-                        List<Player> humansCopy = new ArrayList<>(humans);
-                        List<Player> playersCopy = new ArrayList<>(players);
-                        for (Player p : humansCopy) {
-                            spawnFireworks(p);
-                        }
-                        for (Player p : playersCopy) {
-                            p.sendTitle("§e血清数量到达标准，人类获胜！", null, 5, 50, 5);
-                            String string = "";
-                            for (int i = 0; i < werewolvesCopy.size(); i++) {
-                                string += (" " + werewolvesCopy.get(i).getName());
-                            }
-                            p.sendMessage("§b狼人玩家有 " + string);
-                            p.resetPlayerWeather();
-                            p.resetPlayerTime();
-                            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                                p.teleport(hubLocation);
-                                Bukkit.getPluginManager().callEvent(new PlayerEndGameEvent(p, instance));
-                            }, 100);
-                        }
-                        endGame();
+                        endGame("§e血清数量达到标准，人类获胜！", humans);
                         return;
                     }
                     if (werewolves.size() <= 0) {
-                        pm.removePacketListener(pa);
-                        List<Player> humansCopy = new ArrayList<>(humans);
-                        List<Player> playersCopy = new ArrayList<>(players);
-                        for (Player p : humansCopy) {
-                            spawnFireworks(p);
-                        }
-                        for (Player p : playersCopy) {
-                            p.sendTitle("§e狼人被消灭，人类获胜！", null, 5, 50, 5);
-                            String string = "";
-                            for (int i = 0; i < werewolvesCopy.size(); i++) {
-                                string += (" " + werewolvesCopy.get(i).getName());
-                            }
-                            p.sendMessage("§b狼人玩家有 " + string);
-                            p.resetPlayerWeather();
-                            p.resetPlayerTime();
-                            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                                p.teleport(hubLocation);
-                                Bukkit.getPluginManager().callEvent(new PlayerEndGameEvent(p, instance));
-                            }, 100);
-                        }
-                        endGame();
+                        endGame("§e狼人被消灭，人类获胜！", humans);
                         return;
                     }
                     if (humans.size() <= 0) {
-                        pm.removePacketListener(pa);
-                        List<Player> werewolvesCopy = new ArrayList<>(werewolves);
-                        List<Player> playersCopy = new ArrayList<>(players);
-                        for (Player p : werewolvesCopy) {
-                            spawnFireworks(p);
-                        }
-                        for (Player p : playersCopy) {
-                            p.sendTitle("§e无人类幸存，狼人获胜！", null, 5, 50, 5);
-                            String string = "";
-                            for (int i = 0; i < werewolvesCopy.size(); i++) {
-                                string += (" " + werewolvesCopy.get(i).getName());
-                            }
-                            p.sendMessage("§b狼人玩家有 " + string);
-                            p.resetPlayerWeather();
-                            p.resetPlayerTime();
-                            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                                p.teleport(hubLocation);
-                                Bukkit.getPluginManager().callEvent(new PlayerEndGameEvent(p, instance));
-                            }, 100);
-                        }
-                        endGame();
+                        endGame("§e无人类幸存，狼人获胜！", werewolves);
                         return;
                     }
                 }, 100, 1));
@@ -737,10 +682,13 @@ public class WerewolfGame extends Game implements Listener {
     }
 
     @Override
-    protected void savePlayerQuitData(Player p) throws IOException {
+    protected void quit(Player p) throws IOException {
+        if (!players.contains(p)) {
+            return;
+        }
         PlayerQuitData quitData = new PlayerQuitData(p, this, gameUUID);
         quitData.getData().put("team", whichGroup(p));
-        setPlayerQuitData(p.getUniqueId(), quitData);
+        gameUtils.setPlayerQuitData(p.getUniqueId(), quitData);
         players.remove(p);
         humans.remove(p);
         werewolves.remove(p);
@@ -758,16 +706,16 @@ public class WerewolfGame extends Game implements Listener {
     }
 
     @Override
-    protected void rejoin(Player p) {
+    protected boolean rejoin(Player p) {
         if (!running) {
             p.sendMessage("§c游戏已经结束！");
-            return;
+            return false;
         }
-        if (!getPlayerQuitData(p.getUniqueId()).getGameUUID().equals(gameUUID)) {
+        if (!gameUtils.getPlayerQuitData(p.getUniqueId()).getGameUUID().equals(gameUUID)) {
             p.sendMessage("§c游戏已经结束！");
-            return;
+            return false;
         }
-        PlayerQuitData pqd = getPlayerQuitData(p.getUniqueId());
+        PlayerQuitData pqd = gameUtils.getPlayerQuitData(p.getUniqueId());
         pqd.restoreBasicData(p);
         players.add(p);
         team.addPlayer(p);
@@ -778,6 +726,21 @@ public class WerewolfGame extends Game implements Listener {
         if (pqd.getData().get("team") != null) {
             ((List<Player>) pqd.getData().get("team")).add(p);
         }
-        setPlayerQuitData(p.getUniqueId(), null);
+        gameUtils.setPlayerQuitData(p.getUniqueId(), null);
+        return true;
+    }
+
+    @Override
+    protected boolean join(Player player) {
+        player.setBedSpawnLocation(hubLocation, true);
+        player.teleport(hubLocation);
+        return true;
+    }
+
+    @Override
+    protected void forceStop() {
+        if (running) {
+            endGame("§c游戏被强制终止", new ArrayList<>());
+        }
     }
 }

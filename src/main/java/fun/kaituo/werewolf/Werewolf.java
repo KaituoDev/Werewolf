@@ -1,6 +1,7 @@
-package fun.kaituo;
+package fun.kaituo.werewolf;
 
-import fun.kaituo.event.PlayerChangeGameEvent;
+import fun.kaituo.gameutils.GameUtils;
+import fun.kaituo.gameutils.event.PlayerChangeGameEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -17,10 +18,9 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.util.ArrayList;
 import java.util.List;
 
-import static fun.kaituo.GameUtils.unregisterGame;
-import static fun.kaituo.GameUtils.world;
 
 public class Werewolf extends JavaPlugin implements Listener {
+    private GameUtils gameUtils;
     static List<Player> players;
     static int potionSpawnPeriod;
     static int werewolfNumber;
@@ -38,7 +38,7 @@ public class Werewolf extends JavaPlugin implements Listener {
         if (!pie.getClickedBlock().getType().equals(Material.OAK_BUTTON)) {
             return;
         }
-        if (pie.getClickedBlock().getLocation().equals(new Location(world, -1000, 42, -1008))) {
+        if (pie.getClickedBlock().getLocation().equals(new Location(gameUtils.getWorld(), -1000, 42, -1008))) {
             WerewolfGame.getInstance().startGame();
         }
     }
@@ -117,33 +117,33 @@ public class Werewolf extends JavaPlugin implements Listener {
     }
 
     public void onEnable() {
+        gameUtils = (GameUtils) Bukkit.getPluginManager().getPlugin("GameUtils");
         players = new ArrayList<>();
         Bukkit.getPluginManager().registerEvents(this, this);
         potionSpawnPeriod = 60;
         werewolfNumber = 2;
         voteTime = 20;
-        Sign sign = (Sign) world.getBlockAt(-1001, 41, -1008).getState();
+        Sign sign = (Sign) gameUtils.getWorld().getBlockAt(-1001, 41, -1008).getState();
         sign.setLine(2, "药水生成间隔为 " + potionSpawnPeriod + " 秒");
         sign.update();
-        Sign sign2 = (Sign) world.getBlockAt(-1000, 41, -1008).getState();
+        Sign sign2 = (Sign) gameUtils.getWorld().getBlockAt(-1000, 41, -1008).getState();
         sign2.setLine(2, "狼人数量为 " + werewolfNumber);
         sign2.update();
-        Sign sign3 = (Sign) world.getBlockAt(-999, 41, -1008).getState();
+        Sign sign3 = (Sign) gameUtils.getWorld().getBlockAt(-999, 41, -1008).getState();
         sign3.setLine(2, "投票时间为 " + voteTime + " 秒");
         sign3.update();
-        GameUtils.registerGame(getGameInstance());
+        gameUtils.registerGame(getGameInstance());
     }
 
     public void onDisable() {
         Bukkit.getScheduler().cancelTasks(this);
         HandlerList.unregisterAll((Plugin) this);
-        if (players.size() > 0) {
-            for (Player p : players) {
-                p.teleport(new Location(world, 0.5, 89.0, 0.5));
-                Bukkit.getPluginManager().callEvent(new PlayerChangeGameEvent(p, getGameInstance(), null));
+        for (Player p: Bukkit.getOnlinePlayers()) {
+            if (gameUtils.getPlayerGame(p) == getGameInstance()) {
+                Bukkit.dispatchCommand(p, "join Lobby");
             }
         }
-        unregisterGame(getGameInstance());
+        gameUtils.unregisterGame(getGameInstance());
     }
 
 }
